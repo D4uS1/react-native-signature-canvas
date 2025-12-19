@@ -46,6 +46,17 @@ const styles = StyleSheet.create({
   },
 });
 
+const getParamForInjection = (param) => {
+  switch (typeof param) {
+    case "string":
+      return `'${param}'`
+    case "object":
+      return JSON.stringify(param)
+    default:
+      return param
+  }
+}
+
 const SignatureView = forwardRef(
   (
     {
@@ -228,7 +239,7 @@ const SignatureView = forwardRef(
 
       try {
         const script = params.length > 0
-          ? `${method}(${params.map(p => typeof p === 'string' ? `'${p}'` : p).join(',')});true;`
+          ? `${method}(${params.map(getParamForInjection).join(',')});true;`
           : `${method}();true;`;
         webViewRef.current.injectJavaScript(script);
       } catch (error) {
