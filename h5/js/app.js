@@ -1,60 +1,39 @@
 export default `
-    // Enhanced error handling and validation
     var wrapper = document.getElementById("signature-pad"),
         clearButton = wrapper && wrapper.querySelector("[data-action=clear]"),
         saveButton = wrapper && wrapper.querySelector("[data-action=save]"),
         canvas = wrapper && wrapper.querySelector("canvas"),
         signaturePad;
-        
-    if (!wrapper || !canvas) {
-        console.error('Required DOM elements not found');
-    }
-    
-    // Enhanced canvas resize with debouncing
-    function debounce(func, wait) {
-        var timeout;
-        return function executedFunction() {
-            var later = function() {
-                clearTimeout(timeout);
-                func.apply(this, arguments);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    
+
     function resizeCanvas() {
-        if (!canvas || !canvas.getContext) {
-            console.warn('Canvas not available for resize');
+        if (!canvas || !canvas.getContext || !signaturePad) {
             return;
         }
-        
-        try {
-            var context = canvas.getContext("2d");
-            var imgData = signaturePad ? signaturePad.toData() : null;
-            var ratio = Math.max(window.devicePixelRatio || 1, 1);
-            
-            canvas.width = canvas.offsetWidth * ratio;
-            canvas.height = canvas.offsetHeight * ratio;
-            context.scale(ratio, ratio);
-            
-           // Restore previous signature if available
-          if (imgData && imgData.length > 0 && signaturePad) {
-                signaturePad.fromData(imgData);
-            }
-            else if (dataURL && signaturePad) {
-                 signaturePad.fromDataURL(dataURL);
-            }
-        } catch (error) {
-            console.error('Error resizing canvas:', error);
+
+        var context = canvas.getContext("2d");
+        var ratio = Math.max(window.devicePixelRatio || 1, 1);
+
+        // Save current signature data before resizing
+        var imgData = signaturePad.toData();
+        var hasDrawnContent = imgData && imgData.length > 0;
+
+        // Use canvas client dimensions
+        var width = canvas.clientWidth;
+        var height = canvas.clientHeight;
+
+        // Resize canvas (this clears the canvas)
+        canvas.width = width * ratio;
+        canvas.height = height * ratio;
+        context.scale(ratio, ratio);
+
+        // Restore signature content
+        if (hasDrawnContent) {
+            signaturePad.fromData(imgData);
+        } else if (dataURL) {
+            signaturePad.fromDataURL(dataURL);
         }
     }
-    
-    // Use debounced resize handler
-    var debouncedResize = debounce(resizeCanvas, 100);
-    window.addEventListener('resize', debouncedResize);
-    resizeCanvas();
-    
+
     signaturePad = new SignaturePad(canvas, {
         onBegin: () => window.ReactNativeWebView.postMessage("BEGIN"),
         onEnd: () => window.ReactNativeWebView.postMessage("END"),
@@ -66,17 +45,20 @@ export default `
         minDistance: <%minDistance%>,
     });
 
+    // Initial canvas setup
+    resizeCanvas();
+
     function clearSignature () {
         signaturePad.clear();
-        dataURL=''; // Reset dataURL to avoid restoring cleared signature
+        dataURL='';
         window.ReactNativeWebView.postMessage("CLEAR");
     }
-    
+
     function undo() {
         signaturePad.undo();
         window.ReactNativeWebView.postMessage("UNDO");
     }
-    
+
     function redo() {
         signaturePad.redo();
         window.ReactNativeWebView.postMessage("REDO");
@@ -84,31 +66,24 @@ export default `
 
     function changePenColor(color) {
         if (!signaturePad) {
-            console.warn('SignaturePad not initialized');
             return;
         }
-        
         signaturePad.penColor = color;
         window.ReactNativeWebView && window.ReactNativeWebView.postMessage("CHANGE_PEN");
     }
 
     function changePenSize(minW, maxW) {
         if (!signaturePad) {
-            console.warn('SignaturePad not initialized');
             return;
         }
-        
-        // Validate numeric values
         if (typeof minW !== 'number' || typeof maxW !== 'number' || minW < 0 || maxW < minW) {
-            console.warn('Invalid pen size values:', minW, maxW);
             return;
         }
-        
         signaturePad.minWidth = minW;
         signaturePad.maxWidth = maxW;
         window.ReactNativeWebView && window.ReactNativeWebView.postMessage("CHANGE_PEN_SIZE");
     }
-    
+
     function getData () {
         var data = signaturePad.toData();
         window.ReactNativeWebView.postMessage(JSON.stringify(data));
@@ -133,11 +108,10 @@ export default `
         var myImage = new Image();
         myImage.crossOrigin = "Anonymous";
         myImage.onload = function(){
-            window.ReactNativeWebView.postMessage(removeImageBlanks(myImage)); //Will return cropped image data
+            window.ReactNativeWebView.postMessage(removeImageBlanks(myImage));
         }
         myImage.src = url;
 
-        //-----------------------------------------//
         function removeImageBlanks(imageObject) {
             var imgWidth = imageObject.width;
             var imgHeight = imageObject.height;
@@ -162,49 +136,40 @@ export default `
                     };
                 },
                 isWhite = function (rgb) {
-                    // many images contain noise, as the white is not a pure #fff white
                     return !rgb.opacity || (rgb.red > 200 && rgb.green > 200 && rgb.blue > 200);
                 },
-                        scanY = function (fromTop) {
-                var offset = fromTop ? 1 : -1;
-
-                // loop through each row
-                for(var y = fromTop ? 0 : imgHeight - 1; fromTop ? (y < imgHeight) : (y > -1); y += offset) {
-
-                    // loop through each column
-                    for(var x = 0; x < imgWidth; x++) {
-                        var rgb = getRGB(x, y);
-                        if (!isWhite(rgb)) {
-                            if (fromTop) {
-                                return y;
-                            } else {
-                                return Math.min(y + 1, imgHeight);
+                scanY = function (fromTop) {
+                    var offset = fromTop ? 1 : -1;
+                    for(var y = fromTop ? 0 : imgHeight - 1; fromTop ? (y < imgHeight) : (y > -1); y += offset) {
+                        for(var x = 0; x < imgWidth; x++) {
+                            var rgb = getRGB(x, y);
+                            if (!isWhite(rgb)) {
+                                if (fromTop) {
+                                    return y;
+                                } else {
+                                    return Math.min(y + 1, imgHeight);
+                                }
                             }
                         }
                     }
-                }
-                return null; // all image is white
-            },
-            scanX = function (fromLeft) {
-                var offset = fromLeft? 1 : -1;
-
-                // loop through each column
-                for(var x = fromLeft ? 0 : imgWidth - 1; fromLeft ? (x < imgWidth) : (x > -1); x += offset) {
-
-                    // loop through each row
-                    for(var y = 0; y < imgHeight; y++) {
-                        var rgb = getRGB(x, y);
-                        if (!isWhite(rgb)) {
-                            if (fromLeft) {
-                                return x;
-                            } else {
-                                return Math.min(x + 1, imgWidth);
+                    return null;
+                },
+                scanX = function (fromLeft) {
+                    var offset = fromLeft? 1 : -1;
+                    for(var x = fromLeft ? 0 : imgWidth - 1; fromLeft ? (x < imgWidth) : (x > -1); x += offset) {
+                        for(var y = 0; y < imgHeight; y++) {
+                            var rgb = getRGB(x, y);
+                            if (!isWhite(rgb)) {
+                                if (fromLeft) {
+                                    return x;
+                                } else {
+                                    return Math.min(x + 1, imgWidth);
+                                }
                             }
-                        }      
+                        }
                     }
-                }
-                return null; // all image is white
-            };
+                    return null;
+                };
 
             var cropTop = scanY(true),
                 cropBottom = scanY(false),
@@ -215,7 +180,6 @@ export default `
 
             canvas.setAttribute("width", cropWidth);
             canvas.setAttribute("height", cropHeight);
-            // finally crop the guy
             canvas.getContext("2d").drawImage(imageObject,
                 cropLeft, cropTop, cropWidth, cropHeight,
                 0, 0, cropWidth, cropHeight);
@@ -226,34 +190,29 @@ export default `
 
     function readSignature() {
         if (!signaturePad) {
-            console.warn('SignaturePad not initialized');
             return;
         }
-        
-        try {
-            if (signaturePad.isEmpty()) {
-                window.ReactNativeWebView && window.ReactNativeWebView.postMessage("EMPTY");
+
+        if (signaturePad.isEmpty()) {
+            window.ReactNativeWebView && window.ReactNativeWebView.postMessage("EMPTY");
+        } else {
+            var imageType = '<%imageType%>' || 'image/png';
+            var url = signaturePad.toDataURL(imageType);
+
+            if (trimWhitespace === true) {
+                cropWhitespace(url);
             } else {
-                var imageType = '<%imageType%>' || 'image/png';
-                var url = signaturePad.toDataURL(imageType);
-                
-                if (trimWhitespace === true) {
-                    cropWhitespace(url);
-                } else {
-                    window.ReactNativeWebView && window.ReactNativeWebView.postMessage(url);
-                }
-                
-                if (autoClear === true && signaturePad) {
-                    signaturePad.clear();
-                }
+                window.ReactNativeWebView && window.ReactNativeWebView.postMessage(url);
             }
-        } catch (error) {
-            console.error('Error reading signature:', error);
+
+            if (autoClear === true && signaturePad) {
+                signaturePad.clear();
+            }
         }
     }
 
     var autoClear = <%autoClear%>;
-    
+
     var trimWhitespace = <%trimWhitespace%>;
 
     var dataURL = '<%dataURL%>';
@@ -264,18 +223,12 @@ export default `
         clearButton.addEventListener("click", clearSignature);
     }
 
-    // Prevent race conditions by sequencing operations
     if (saveButton) {
         saveButton.addEventListener("click", function() {
-            try {
-                readSignature();
-                // Small delay to prevent race condition
-                setTimeout(function() {
-                    getData();
-                }, 10);
-            } catch (error) {
-                console.error('Error in save button click:', error);
-            }
+            readSignature();
+            setTimeout(function() {
+                getData();
+            }, 10);
         });
     }
 `;

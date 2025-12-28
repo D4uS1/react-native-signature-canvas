@@ -108,18 +108,29 @@ const SignatureView = forwardRef(
     ref
   ) => {
     const [loading, setLoading] = useState(true);
-
     const [hasError, setHasError] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
+    // Key to force WebView remount when needed (e.g., after content process termination)
+    const [webViewKey, setWebViewKey] = useState(0);
     const maxRetries = 3;
     const webViewRef = useRef();
+    // Store dataURL for injection - updates when dataURL prop changes
+    const currentDataURLRef = useRef(dataURL);
+
+    // Update ref when dataURL prop changes
+    useEffect(() => {
+      currentDataURLRef.current = dataURL;
+    }, [dataURL]);
+
     // Split source generation for better performance
+    // Include webViewKey to regenerate script when WebView needs remounting
     const injectedScript = useMemo(() => {
       let script = injectedSignaturePad + injectedApplication;
       script = script.replace(/<%autoClear%>/g, autoClear);
       script = script.replace(/<%trimWhitespace%>/g, trimWhitespace);
       script = script.replace(/<%imageType%>/g, imageType || "image/png");
-      script = script.replace(/<%dataURL%>/g, dataURL || "");
+      // Use currentDataURLRef to get the latest dataURL value
+      script = script.replace(/<%dataURL%>/g, currentDataURLRef.current || "");
       script = script.replace(/<%penColor%>/g, penColor || "black");
       script = script.replace(/<%backgroundColor%>/g, backgroundColor || "rgba(255,255,255,0)");
       script = script.replace(/<%dotSize%>/g, dotSize || "null");
@@ -128,7 +139,7 @@ const SignatureView = forwardRef(
       script = script.replace(/<%minDistance%>/g, minDistance || 5);
       script = script.replace(/<%orientation%>/g, rotated || false);
       return script;
-    }, [autoClear, trimWhitespace, imageType, dataURL, penColor, backgroundColor, dotSize, minWidth, maxWidth, minDistance, rotated]);
+    }, [autoClear, trimWhitespace, imageType, penColor, backgroundColor, dotSize, minWidth, maxWidth, minDistance, rotated, webViewKey]);
 
     const source = useMemo(() => {
       const htmlContentValue = customHtml || htmlContent;
@@ -148,23 +159,33 @@ const SignatureView = forwardRef(
       return { html };
     }, [injectedScript, customHtml, bgWidth, bgHeight, bgSrc, overlayWidth, overlayHeight, overlaySrc, webStyle, descriptionText, confirmText, clearText, rotated]);
 
-    // Optimize WebView reload to prevent excessive reloads
-    const [shouldReload, setShouldReload] = useState(false);
+    // Handle dataURL changes dynamically without reloading WebView
+    const prevDataURLRef = useRef(dataURL);
 
     useEffect(() => {
-      setShouldReload(true);
-    }, [source]);
+      // Skip if dataURL hasn't changed or WebView isn't ready
+      if (prevDataURLRef.current === dataURL || !webViewRef.current || loading) {
+        return;
+      }
 
-    useEffect(() => {
-      if (shouldReload && webViewRef.current) {
+      prevDataURLRef.current = dataURL;
+
+      // Update dataURL in WebView without full reload
+      if (dataURL) {
+        const script = `
+          dataURL = '${dataURL}';
+          if (signaturePad && signaturePad.isEmpty()) {
+            signaturePad.fromDataURL(dataURL);
+          }
+          true;
+        `;
         try {
-          webViewRef.current.reload();
-          setShouldReload(false);
+          webViewRef.current.injectJavaScript(script);
         } catch (error) {
-          console.warn("WebView reload failed:", error);
+          console.warn("Failed to update dataURL:", error);
         }
       }
-    }, [shouldReload]);
+    }, [dataURL, loading]);
 
     const isJson = (str) => {
       try {
@@ -278,6 +299,38 @@ const SignatureView = forwardRef(
           }
           executeWebViewMethod('fromData', [pointGroups, false]);
         },
+        // New method to set dataURL without causing WebView reload
+        setDataURL: (url) => {
+          if (typeof url !== 'string') {
+            console.warn('setDataURL: url must be a string');
+            return;
+          }
+          if (!webViewRef.current) {
+            console.warn('WebView ref is null when calling setDataURL');
+            return;
+          }
+          const script = `
+            dataURL = '${url}';
+            if (signaturePad) {
+              signaturePad.clear();
+              if (dataURL) {
+                signaturePad.fromDataURL(dataURL);
+              }
+            }
+            true;
+          `;
+          try {
+            webViewRef.current.injectJavaScript(script);
+          } catch (error) {
+            console.error('Error executing setDataURL:', error);
+          }
+        },
+        // Force reinitialize WebView - useful for bottom sheets/modals where WebView state is lost
+        reinitialize: () => {
+          setLoading(true);
+          setHasError(false);
+          setWebViewKey(prev => prev + 1);
+        },
       }),
       [executeWebViewMethod]
     );
@@ -307,6 +360,16 @@ const SignatureView = forwardRef(
       }
     }, [onError, retryCount, maxRetries]);
 
+    // Handle iOS WebView content process termination (WKWebView can be killed when app is backgrounded)
+    // This is crucial for bottom sheets and modals where the component stays mounted but WebView is killed
+    const handleContentProcessDidTerminate = useCallback(() => {
+      console.warn("WebView content process terminated, reinitializing...");
+      setLoading(true);
+      setHasError(false);
+      // Increment key to force WebView remount with fresh JavaScript context
+      setWebViewKey(prev => prev + 1);
+    }, []);
+
     const handleLoadEnd = useCallback(() => {
       setLoading(false);
       setHasError(false);
@@ -334,6 +397,8 @@ const SignatureView = forwardRef(
     return (
       <View style={[styles.webBg, style]}>
         <WebView
+          // Key for forcing remount when WebView needs reinitialization
+          key={`signature-webview-${webViewKey}`}
           // Core functionality props (cannot be overridden)
           ref={webViewRef}
           source={source}
@@ -342,11 +407,13 @@ const SignatureView = forwardRef(
           onLoadEnd={handleLoadEnd}
           onLoadStart={handleLoadStart}
           onLoadProgress={handleLoadProgress}
+          // Handle iOS WKWebView content process termination (crucial for bottom sheets/modals)
+          onContentProcessDidTerminate={handleContentProcessDidTerminate}
           javaScriptEnabled={true}
           useWebKit={true}
           // Default component props (can be overridden by webviewProps)
           bounces={false}
-          style={[webviewContainerStyle]}
+          style={[{ flex: 1 }, webviewContainerStyle]}
           scrollEnabled={scrollable}
           androidLayerType={androidLayerType}
           androidHardwareAccelerationDisabled={

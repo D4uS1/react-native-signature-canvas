@@ -76,8 +76,11 @@ declare module "react-native-signature-canvas" {
     readSignature: () => void;
     undo: () => void;
     redo: () => void;
-    fromData: (pointGroups, suppressClear = false) => void;
-    // Removed cropWhitespace as it's not exposed in the component
+    fromData: (pointGroups: any[], suppressClear?: boolean) => void;
+    /** Set dataURL without causing WebView reload - useful for restoring signatures */
+    setDataURL: (url: string) => void;
+    /** Force reinitialize WebView - useful for bottom sheets/modals where WebView state is lost */
+    reinitialize: () => void;
   };
 
   // Enhanced component interface with better type safety

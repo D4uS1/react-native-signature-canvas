@@ -1,4 +1,4 @@
-# [5.0.0](https://github.com/YanYuanFE/react-native-signature-canvas/compare/v4.5.1...v5.0.0) (2025-06-28)
+## [5.0.1](https://github.com/YanYuanFE/react-native-signature-canvas/compare/v4.5.1...v5.0.1) (2025-12-28)
 
 
 ### Bug Fixes

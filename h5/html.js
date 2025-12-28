@@ -12,36 +12,36 @@ export default (script) =>
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
   <style>
-    body {
-      font-family: Helvetica, Sans-Serif;
-    
-      -moz-user-select: none;
-      -webkit-user-select: none;
-      -ms-user-select: none;
-      margin:0;
-      overflow:hidden;
-    }
-    body,html {
-      width: 100%;
-      height: 300px;
-    }
     * {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
     }
-    
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    body {
+      font-family: Helvetica, Sans-Serif;
+      -moz-user-select: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
+    }
+
     .rotated-true {
       transform: rotate(90deg);
       transform-origin:bottom left;
-      
+
       position:absolute;
       top: -100vw;
       left: 0;
-      
+
       height:100vw;
       width:100vh;
-      
+
       overflow:auto;
     }
     .rotated-false {
@@ -56,15 +56,16 @@ export default (script) =>
       background-color: #fff;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27), 0 0 40px rgba(0, 0, 0, 0.08) inset;
     }
-    
+
     .m-signature-pad--body {
       position: relative;
+      width: 100%;
       height: 100%;
       border: 1px solid #f4f4f4;
     }
-    
-    .m-signature-pad--body
-      canvas {
+
+    .m-signature-pad--body canvas {
+        display: block;
         position: absolute;
         left: 0;
         top: 0;
@@ -125,7 +126,7 @@ export default (script) =>
     
     @media screen and (min-device-width: 768px) and (max-device-width: 1024px) {
       .m-signature-pad {
-        margin: 10%;
+        margin: 0;
       }
     }
     
