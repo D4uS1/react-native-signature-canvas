@@ -1,3 +1,12 @@
+## [5.0.2](https://github.com/YanYuanFE/react-native-signature-canvas/compare/v5.0.1...v5.0.2) (2025-12-28)
+
+
+### Features
+
+* enhance signature canvas with bottom sheet integration and WebView improvements ([69f84a1](https://github.com/YanYuanFE/react-native-signature-canvas/commit/69f84a1))
+
+
+
 ## [5.0.1](https://github.com/YanYuanFE/react-native-signature-canvas/compare/v4.5.1...v5.0.1) (2025-12-28)
 
 
