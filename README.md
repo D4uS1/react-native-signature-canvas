@@ -1,5 +1,7 @@
 # React Native Signature Canvas
 
+This is a fork of [react-native-signature-canvas](https://github.com/YanYuanFE/react-native-signature-canvas/) to fix [this issue](https://github.com/YanYuanFE/react-native-signature-canvas/issues/412).
+
 [![](https://img.shields.io/npm/l/react-native-signature-canvas.svg)](https://www.npmjs.com/package/react-native-signature-canvas)
 [![](https://img.shields.io/npm/v/react-native-signature-canvas)](https://www.npmjs.com/package/react-native-signature-canvas)
 ![npm](https://img.shields.io/npm/dt/react-native-signature-canvas)
